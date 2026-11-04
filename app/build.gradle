@@ -1,0 +1,44 @@
+plugins { id 'com.android.application' }
+def signingProperties = new Properties()
+def signingFile = rootProject.file('signing/release.properties')
+if (signingFile.exists()) signingFile.withInputStream { signingProperties.load(it) }
+android {
+    namespace 'com.quiet.background'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'com.quiet.background'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    signingConfigs {
+        release {
+            if (signingFile.exists()) {
+                storeFile rootProject.file('signing/quiet-release.jks')
+                storePassword signingProperties['storePassword']
+                keyAlias 'quiet'
+                keyPassword signingProperties['keyPassword']
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    androidResources { noCompress += ['m4a'] }
+    lint { abortOnError true }
+}
+dependencies {
+    implementation 'androidx.media3:media3-exoplayer:1.9.3'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:rules:1.6.1'
+}
