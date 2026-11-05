@@ -15,7 +15,7 @@
 
 ## 下载
 
-[下载最新正式 APK](https://github.com/Sorin-n/quiet-background-android/releases/latest) · [v1.2.1 发布页](https://github.com/Sorin-n/quiet-background-android/releases/tag/v1.2.1)
+[下载最新正式 APK](https://github.com/Sorin-n/quiet-background-android/releases/latest) · [v1.3.0 发布页](https://github.com/Sorin-n/quiet-background-android/releases/tag/v1.3.0)
 
 APK 约 457 MB，音源全部内置。校验值和安装说明随 Release 一起提供。
 
@@ -23,17 +23,19 @@ APK 约 457 MB，音源全部内置。校验值和安装说明随 Release 一起
 
 ## 安装与使用
 
-将 `dist/静听背景音-v1.2.1-release.apk` 传到 Android 手机，打开 APK 安装。若系统询问，为当前文件管理器开启“允许安装未知应用”。安装后选择声音并点按播放；Android 13 及以上可允许通知以方便控制。
+将 `dist/静听背景音-v1.3.0-release.apk` 传到 Android 手机，打开 APK 安装。若系统询问，为当前文件管理器开启“允许安装未知应用”。安装后选择声音并点按播放；Android 13 及以上可允许通知以方便控制。
 
 这是签名的 Release APK，非调试包。音源全部保留，因此 APK 约 460 MB。首次安装需预留足够存储。应用没有开机自动播放；系统强制停止后需手动打开。部分厂商的省电管理可能中断后台播放，可在该手机的电池设置中允许本 App 后台运行。其他应用自身主动暂停、电话/系统策略强制静音等情况无法由本 App 保证覆盖。
 
 ## 控制中心快捷开关
 
-安装 v1.2.1 后，下拉控制中心，进入编辑快捷开关，把「背景音」加入常用开关。点按后，通过系统快捷开关弹窗开启或关闭背景音、拖动独立音量滑块、切换音源，或在「背景音设置」中更改息屏播放行为。点「完成」收起面板，正在播放的声音会继续。手机锁定时需先解锁。
+在控制中心编辑快捷开关，把「背景音」加入常用开关。在手机设置中搜索「无障碍」，进入已安装的服务，启用「静听原位面板」。验证版的授权与正式版独立。
 
-<img src="docs/screenshot-tile.png" width="300" alt="背景音快捷开关弹窗">
+解锁后点按「背景音」，炭灰色面板会从开关位置展开。可以播放或停止、拖动蓝色滑杆调整独立音量、切换声音，或进入「背景音设置」调整息屏行为。点右上角箭头收回面板。下图为 Android 模拟器中的实际界面。
 
-快捷开关使用 Android TileService，所有操作共用一个弹窗。控制中心是否收起由手机系统决定。下方的智慧生活场景则用于打开 App 主界面。
+<img src="docs/screenshot-anchored.png" width="300" alt="控制中心内展开的背景音面板">
+
+这项可选无障碍服务在点按时读取系统控制中心的界面节点，以定位快捷开关。若关闭服务或系统未提供开关位置，则使用系统快捷开关弹窗。
 
 ## 在华为控制中心添加「背景音」入口
 

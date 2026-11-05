@@ -27,6 +27,8 @@ public final class BackgroundTileService extends TileService {
     private boolean listening;
     private boolean bound;
     private AlertDialog panel;
+    private PanelLayer layer;
+    private ControlCard card;
     private Button power;
     private Button sound;
     private TextView status;
@@ -54,6 +56,7 @@ public final class BackgroundTileService extends TileService {
 
     @Override public void onStopListening() {
         listening = false;
+        if (layer != null) layer.remove();
         releaseIfIdle();
     }
 
@@ -62,7 +65,7 @@ public final class BackgroundTileService extends TileService {
     }
 
     private void releaseIfIdle() {
-        if (listening || panel != null || !bound) return;
+        if (listening || panel != null || card != null || !bound) return;
         if (playback != null) playback.removeControlsListener(changed);
         unbindService(connection);
         bound = false;
@@ -74,8 +77,37 @@ public final class BackgroundTileService extends TileService {
         else openPanel();
     }
 
+    private void togglePower() {
+        if (playback == null) return;
+        if (playback.playing()) playback.stopPlayback();
+        else {
+            try {
+                startForegroundService(new Intent(this, PlaybackService.class).setAction(PlaybackService.PLAY));
+            } catch (IllegalStateException denied) {
+                Toast.makeText(this, "系统未允许开始播放，请解锁并重新点按快捷开关。", Toast.LENGTH_LONG).show();
+            }
+        }
+        refresh();
+    }
+
     private void openPanel() {
+        if (card != null) { layer.collapse(); return; }
         if (panel != null) return;
+        layer = PanelLayer.connected();
+        if (layer != null) {
+            card = new ControlCard(layer, this::togglePower, layer::collapse);
+            if (layer.show(card, () -> {
+                card = null;
+                layer = null;
+                releaseIfIdle();
+            })) {
+                connect();
+                refresh();
+                return;
+            }
+            card = null;
+            layer = null;
+        }
         Context ui = new ContextThemeWrapper(this, android.R.style.Theme_Material_Light_Dialog_Alert);
         LinearLayout content = new LinearLayout(ui);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -86,17 +118,7 @@ public final class BackgroundTileService extends TileService {
         status = new TextView(ui);
         content.addView(status);
         power = button(content, "开启背景音");
-        power.setOnClickListener(v -> {
-            if (playback == null) return;
-            if (playback.playing()) playback.stopPlayback();
-            else {
-                try {
-                    startForegroundService(new Intent(this, PlaybackService.class).setAction(PlaybackService.PLAY));
-                } catch (IllegalStateException denied) {
-                    Toast.makeText(this, "系统未允许开始播放，请解锁并重新点按快捷开关。", Toast.LENGTH_LONG).show();
-                }
-            }
-        });
+        power.setOnClickListener(v -> togglePower());
         volumeLabel = new TextView(ui);
         content.addView(volumeLabel);
         volume = new SeekBar(ui);
@@ -178,6 +200,7 @@ public final class BackgroundTileService extends TileService {
             if (Build.VERSION.SDK_INT >= 29) tile.setSubtitle(playing ? name : "已关闭");
             tile.updateTile();
         }
+        if (card != null) card.update(playback);
         if (panel == null) return;
         power.setEnabled(playback != null);
         sound.setEnabled(playback != null);
@@ -198,6 +221,7 @@ public final class BackgroundTileService extends TileService {
 
     @Override public void onDestroy() {
         listening = false;
+        if (layer != null) layer.remove();
         if (panel != null) panel.dismiss();
         panel = null;
         releaseIfIdle();

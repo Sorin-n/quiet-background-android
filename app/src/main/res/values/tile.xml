@@ -2,4 +2,6 @@
     <string name="tile_name">背景音</string>
     <string name="tile_volume">背景音量 %1$d%%</string>
     <string name="tile_sound">切换背景音 · %1$s</string>
+    <string name="panel_accessibility_name">静听原位面板</string>
+    <string name="panel_accessibility_description">点按背景音快捷开关时，读取系统控制中心里按钮的位置，用于在原位展开和收起播放面板。</string>
 </resources>
