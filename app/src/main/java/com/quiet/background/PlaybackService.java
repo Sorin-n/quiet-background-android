@@ -11,6 +11,7 @@ import android.media.session.PlaybackState;
 import android.os.*;
 import androidx.media3.common.*;
 import androidx.media3.exoplayer.ExoPlayer;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,9 +19,43 @@ import java.util.List;
 public class PlaybackService extends Service {
     public static final String PLAY = "com.quiet.background.PLAY", PAUSE = "com.quiet.background.PAUSE",
         STOP = "com.quiet.background.STOP";
+    static final String TOGGLE = "com.quiet.background.TOGGLE";
     private static final String CHANNEL = "playback";
     private final LocalBinder binder = new LocalBinder();
     private ExoPlayer player;
+    private String loadedSound;
+    private boolean closing;
+    private float envelope;
+    private Runnable fadeStep;
+
+    private void applyGain() {
+        player.setVolume(Volume.gain(percent()) * envelope);
+    }
+
+    private void cancelFade() {
+        if (fadeStep != null) handler.removeCallbacks(fadeStep);
+        fadeStep = null;
+    }
+
+    private void fade(float target, int durationMs, Runnable finished) {
+        cancelFade();
+        float from = envelope;
+        long began = SystemClock.uptimeMillis();
+        fadeStep = new Runnable() {
+            @Override public void run() {
+                float t = Math.min(1f, (SystemClock.uptimeMillis() - began) / (float) durationMs);
+                if (from == target || !player.isPlaying()) t = 1f;
+                envelope = from + (target - from) * t;
+                applyGain();
+                if (t < 1f) handler.postDelayed(this, 8);
+                else {
+                    fadeStep = null;
+                    if (finished != null) finished.run();
+                }
+            }
+        };
+        fadeStep.run();
+    }
     private MediaSession session;
     private String selected;
     private int soloPercent;
@@ -58,7 +93,7 @@ public class PlaybackService extends Service {
         }
         if (external == otherMedia) return;
         otherMedia = external;
-        player.setVolume(Volume.gain(percent()));
+        applyGain();
         notifyControls();
     }
     private String error = "";
@@ -79,7 +114,10 @@ public class PlaybackService extends Service {
         }
     };
     public class LocalBinder extends Binder { public PlaybackService service() { return PlaybackService.this; } }
-    @Override public IBinder onBind(Intent intent) { return binder; }
+    @Override public IBinder onBind(Intent intent) {
+        if (loadedSound == null) prepareSelected();
+        return binder;
+    }
     @Override public void onCreate() {
         super.onCreate();
         selected = SoundCatalog.find(getSharedPreferences("settings", 0).getString("sound", "Rain")).key();
@@ -93,10 +131,11 @@ public class PlaybackService extends Service {
         player = new ExoPlayer.Builder(this)
             .setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_SONIFICATION).build(), false)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_LOCAL).build();
-        player.setVolume(Volume.gain(percent()));
+        applyGain();
         audio = getSystemService(AudioManager.class);
         audio.registerAudioPlaybackCallback(mediaCallback, handler);
         refreshMediaMode();
+        player.setPreloadConfiguration(new ExoPlayer.PreloadConfiguration(1_000_000L));
         player.setRepeatMode(Player.REPEAT_MODE_ALL);
         session = new MediaSession(this, "QuietBackground");
         session.setSessionActivity(PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE));
@@ -108,8 +147,14 @@ public class PlaybackService extends Service {
         });
         registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
         player.addListener(new Player.Listener() {
-            @Override public void onIsPlayingChanged(boolean isPlaying) { scheduleMediaCheck(); }
-            @Override public void onEvents(Player p, Player.Events events) { updateState(); }
+            @Override public void onIsPlayingChanged(boolean isPlaying) {
+                scheduleMediaCheck();
+                if (isPlaying && !closing && fadeStep == null && envelope < 1f) fade(1f, 64, null);
+            }
+            @Override public void onEvents(Player p, Player.Events events) {
+                if (events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_PLAYBACK_STATE_CHANGED,
+                        Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_PLAYER_ERROR)) updateState();
+            }
             @Override public void onPlayerError(PlaybackException e) {
                 error = "音源播放失败，请重新选择音源后重试。";
                 player.pause();
@@ -120,7 +165,7 @@ public class PlaybackService extends Service {
     public String selected() { return selected; }
     public int percent() { return otherMedia ? mixedPercent : soloPercent; }
     String volumeLabel() { return otherMedia ? "与其他媒体同播音量" : "单独播放音量"; }
-    public boolean playing() { return player.getPlayWhenReady() && player.getPlayerError() == null; }
+    public boolean playing() { return !closing && player.getPlayWhenReady() && player.getPlayerError() == null; }
     public String status() {
         if (!error.isEmpty()) return error;
         if (playing() && player.getPlaybackState() == Player.STATE_BUFFERING) return "正在准备音源…";
@@ -130,7 +175,7 @@ public class PlaybackService extends Service {
         int percent = Volume.clamp(value);
         if (otherMedia) mixedPercent = percent;
         else soloPercent = percent;
-        player.setVolume(Volume.gain(percent));
+        applyGain();
         getSharedPreferences("settings", 0).edit().putInt(otherMedia ? "mixedVolume" : "volume", percent).apply();
         notifyControls();
     }
@@ -140,48 +185,91 @@ public class PlaybackService extends Service {
         boolean resume = playing();
         selected = next;
         getSharedPreferences("settings", 0).edit().putString("sound", selected).apply();
-        player.stop();
-        player.clearMediaItems();
-        error = "";
-        if (resume) startPlayback(selected); else updateState();
+        if (resume) fade(0f, 48, () -> switchSound(true));
+        else if (!closing) switchSound(false);
     }
-    public void startPlayback(String key) {
-        // Foreground promotion must precede asynchronous player preparation.
-        promote();
+
+    private boolean prepareSelected() {
         try {
-            String next = SoundCatalog.find(key).key();
-            if (!selected.equals(next) || player.getMediaItemCount() == 0 || player.getPlayerError() != null) {
-                selected = next;
-                getSharedPreferences("settings", 0).edit().putString("sound", selected).apply();
+            if (!selected.equals(loadedSound) || player.getPlayerError() != null) {
                 List<MediaItem> items = new ArrayList<>();
                 for (String file : SoundCatalog.files(this, selected)) items.add(MediaItem.fromUri("asset:///audio/" + file));
-                if (items.isEmpty()) throw new IllegalStateException("Missing audio");
+                if (items.isEmpty()) throw new IOException("Missing audio");
                 player.setMediaItems(items);
+                loadedSound = selected;
             }
+            if (player.getPlaybackState() == Player.STATE_IDLE) player.prepare();
             error = "";
-            player.prepare();
-            player.play();
-            session.setActive(true);
-            updateState();
-        } catch (Exception e) {
+            return true;
+        } catch (IOException e) {
+            loadedSound = null;
             error = "无法打开音源，请重新安装完整安装包。";
             player.pause();
             updateState();
+            return false;
         }
     }
-    public void pause() { player.pause(); updateState(); }
-    void stopPlayback() {
-        player.pause(); player.stop(); player.clearMediaItems();
-        session.setActive(false);
-        stopForeground(STOP_FOREGROUND_REMOVE); foreground = false;
-        getSystemService(NotificationManager.class).cancel(1);
-        stopSelf();
-        notifyControls();
+
+    private void switchSound(boolean resume) {
+        if (!resume) player.pause();
+        envelope = 0f;
+        applyGain();
+        if (prepareSelected() && resume) player.play();
+        updateState();
+    }
+
+    public void startPlayback(String key) {
+        if (!foreground) promote();
+        closing = false;
+        cancelFade();
+        if (!SoundCatalog.find(key).key().equals(selected)) {
+            select(key);
+            if (player.getPlayWhenReady()) return;
+        }
+        if (!prepareSelected()) return;
+        session.setActive(true);
+        if (player.isPlaying()) fade(1f, 64, null);
+        player.play();
+        updateState();
+    }
+
+    public void pause() { finishPlayback(false); }
+    void stopPlayback() { finishPlayback(true); }
+
+    private void finishPlayback(boolean stop) {
+        closing = true;
+        if (stop) {
+            // Silence immediately on explicit off, before session and notification IPC.
+            cancelFade();
+            envelope = 0f;
+            applyGain();
+            player.pause();
+            session.setActive(false);
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            foreground = false;
+            getSystemService(NotificationManager.class).cancel(1);
+            stopSelf();
+            finishClose();
+        } else {
+            fade(0f, 16, () -> {
+                player.pause();
+                finishClose();
+            });
+        }
+    }
+
+    private void finishClose() {
+        closing = false;
+        if (!selected.equals(loadedSound)) prepareSelected();
+        updateState();
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
             String action = intent.getAction();
-            if (STOP.equals(action)) stopPlayback();
+            if (TOGGLE.equals(action)) {
+                if (playing()) stopPlayback();
+                else startPlayback(selected);
+            } else if (STOP.equals(action)) stopPlayback();
             else if (PAUSE.equals(action)) pause();
             else if (PLAY.equals(action)) startPlayback(intent.getStringExtra("sound") == null ? selected : intent.getStringExtra("sound"));
         }
@@ -224,6 +312,7 @@ public class PlaybackService extends Service {
     }
     // Swiping away the activity deliberately leaves an active foreground playback service running.
     @Override public void onDestroy() {
+        cancelFade();
         audio.unregisterAudioPlaybackCallback(mediaCallback);
         unregisterReceiver(screenOff);
         player.release(); handler.removeCallbacks(checkMedia); session.release();

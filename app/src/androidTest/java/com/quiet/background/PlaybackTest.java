@@ -49,7 +49,15 @@ public class PlaybackTest {
         int total=0;
         for (SoundCatalog.Sound sound : SoundCatalog.ALL) {
             total += SoundCatalog.files(context, sound.key()).size();
-            main(() -> service.startPlayback(sound.key())); ready();
+            String firstFile = SoundCatalog.files(context, sound.key()).get(0);
+            main(() -> service.startPlayback(sound.key()));
+            boolean[] switched = {false};
+            for (int i = 0; i < 100 && !switched[0]; i++) {
+                main(() -> switched[0] = player.isPlaying() && firstFile.equals(
+                    player.getCurrentMediaItem().localConfiguration.uri.getLastPathSegment()));
+                if (!switched[0]) Thread.sleep(50);
+            }
+            assertTrue("Expected playback of " + firstFile, switched[0]);
             main(() -> assertNull(player.getPlayerError()));
         }
         assertEquals(83, total);
@@ -67,7 +75,9 @@ public class PlaybackTest {
             other.setAudioAttributes(new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).build());
             other.setDataSource(fd.getFileDescriptor(),fd.getStartOffset(),fd.getLength()); other.setLooping(true); other.prepare();
             audio.requestAudioFocus(focus); other.start();
-            main(() -> { service.startPlayback("Rain"); service.setPercent(50); assertEquals(.5f, player.getVolume(), .001f); }); ready();
+            main(() -> { service.startPlayback("Rain"); service.setPercent(50); assertEquals(50, service.percent()); }); ready();
+            Thread.sleep(100);
+            main(() -> assertEquals(.5f, player.getVolume(), .001f));
             assertTrue(other.isPlaying()); assertEquals(original,audio.getStreamVolume(AudioManager.STREAM_MUSIC));
             main(() -> { service.setPercent(0); assertEquals(0f, player.getVolume(),0f); service.setPercent(100); assertEquals(1f,player.getVolume(),0f); });
             audio.abandonAudioFocusRequest(focus); audio.requestAudioFocus(focus);

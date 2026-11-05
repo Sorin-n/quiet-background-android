@@ -79,15 +79,14 @@ public final class BackgroundTileService extends TileService {
 
     private void togglePower() {
         if (playback == null) return;
-        if (playback.playing()) playback.stopPlayback();
-        else {
-            try {
-                startForegroundService(new Intent(this, PlaybackService.class).setAction(PlaybackService.PLAY));
-            } catch (IllegalStateException denied) {
-                Toast.makeText(this, "系统未允许开始播放，请解锁并重新点按快捷开关。", Toast.LENGTH_LONG).show();
-            }
+        try {
+            // Resolve each tap in delivery order, including taps queued before playback starts.
+            Intent toggle = new Intent(this, PlaybackService.class).setAction(PlaybackService.TOGGLE);
+            if (playback.playing()) startService(toggle);
+            else startForegroundService(toggle);
+        } catch (IllegalStateException denied) {
+            Toast.makeText(this, "系统未允许操作，请解锁并重新点按快捷开关。", Toast.LENGTH_LONG).show();
         }
-        refresh();
     }
 
     private void openPanel() {

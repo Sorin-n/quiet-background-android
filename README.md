@@ -5,7 +5,7 @@
 ## 功能
 
 - 15 类音源、83 个原始 M4A 文件，约 234 分钟，完整内置，不重编码。
-- 同类分段按数字顺序连续播放，播放完最后一段后循环。
+- 同类分段按数字顺序连续播放，并预载下一段。打开播放界面时静默准备所选声音，面板内关闭后可快速再次开启。播放中切换音源时，旧声淡出、新声淡入。
 - 前台媒体播放服务支持切换应用、锁屏和从最近任务移除界面后继续播放。
 - 通知栏及锁屏播放/暂停/停止；耳机断开自动暂停。
 - 单独播放和与其他媒体同播各记忆一档 0–100% 音量。其他媒体开始或暂停后自动切换，滑杆调整当前档位。升级时两档继承原音量。默认 40%，首次打开不会自动发声。
@@ -15,7 +15,7 @@
 
 ## 下载
 
-[下载最新正式 APK](https://github.com/Sorin-n/quiet-background-android/releases/latest) · [v1.4.0 发布页](https://github.com/Sorin-n/quiet-background-android/releases/tag/v1.4.0)
+[下载最新正式 APK](https://github.com/Sorin-n/quiet-background-android/releases/latest) · [v1.4.1 发布页](https://github.com/Sorin-n/quiet-background-android/releases/tag/v1.4.1)
 
 APK 约 457 MB，音源全部内置。校验值和安装说明随 Release 一起提供。
 
@@ -23,7 +23,7 @@ APK 约 457 MB，音源全部内置。校验值和安装说明随 Release 一起
 
 ## 安装与使用
 
-将 `dist/静听背景音-v1.4.0-release.apk` 传到 Android 手机，打开 APK 安装。若系统询问，为当前文件管理器开启“允许安装未知应用”。安装后选择声音并点按播放；Android 13 及以上可允许通知以方便控制。
+将 `dist/静听背景音-v1.4.1-release.apk` 传到 Android 手机，打开 APK 安装。若系统询问，为当前文件管理器开启“允许安装未知应用”。安装后选择声音并点按播放；Android 13 及以上可允许通知以方便控制。
 
 这是签名的 Release APK，非调试包。音源全部保留，因此 APK 约 460 MB。首次安装需预留足够存储。应用没有开机自动播放；系统强制停止后需手动打开。部分厂商的省电管理可能中断后台播放，可在该手机的电池设置中允许本 App 后台运行。其他应用自身主动暂停、电话/系统策略强制静音等情况无法由本 App 保证覆盖。
 
