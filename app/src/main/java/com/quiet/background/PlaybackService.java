@@ -24,6 +24,12 @@ public class PlaybackService extends Service {
     private int percent;
     private String error = "";
     private boolean foreground;
+    private final java.util.Set<Runnable> controlsListeners = new java.util.HashSet<>();
+    void addControlsListener(Runnable listener) { controlsListeners.add(listener); }
+    void removeControlsListener(Runnable listener) { controlsListeners.remove(listener); }
+    private void notifyControls() {
+        for (Runnable listener : controlsListeners) listener.run();
+    }
     static final String STOP_ON_SCREEN_OFF = "stopOnScreenOff";
     private final BroadcastReceiver screenOff = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -77,6 +83,7 @@ public class PlaybackService extends Service {
         percent = Volume.clamp(value);
         player.setVolume(Volume.gain(percent));
         getSharedPreferences("settings", 0).edit().putInt("volume", percent).apply();
+        notifyControls();
     }
     public void select(String key) {
         String next = SoundCatalog.find(key).key();
@@ -120,6 +127,7 @@ public class PlaybackService extends Service {
         stopForeground(STOP_FOREGROUND_REMOVE); foreground = false;
         getSystemService(NotificationManager.class).cancel(1);
         stopSelf();
+        notifyControls();
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
@@ -163,6 +171,7 @@ public class PlaybackService extends Service {
         if (active && !foreground) promote();
         if (foreground || session.isActive()) getSystemService(NotificationManager.class).notify(1, notification());
         if (!active && foreground) { stopForeground(STOP_FOREGROUND_DETACH); foreground = false; }
+        notifyControls();
     }
     // Swiping away the activity deliberately leaves an active foreground playback service running.
     @Override public void onDestroy() {

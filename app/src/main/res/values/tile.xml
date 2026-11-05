@@ -1,0 +1,5 @@
+<resources>
+    <string name="tile_name">背景音</string>
+    <string name="tile_volume">背景音量 %1$d%%</string>
+    <string name="tile_sound">切换背景音 · %1$s</string>
+</resources>
