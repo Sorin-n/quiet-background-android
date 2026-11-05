@@ -4,6 +4,8 @@ import android.app.*;
 import android.content.*;
 import android.content.pm.ServiceInfo;
 import android.media.MediaMetadata;
+import android.media.AudioManager;
+import android.media.AudioPlaybackConfiguration;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.*;
@@ -21,7 +23,44 @@ public class PlaybackService extends Service {
     private ExoPlayer player;
     private MediaSession session;
     private String selected;
-    private int percent;
+    private int soloPercent;
+    private int mixedPercent;
+    private boolean otherMedia;
+    private AudioManager audio;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable checkMedia = this::refreshMediaMode;
+    private final AudioManager.AudioPlaybackCallback mediaCallback = new AudioManager.AudioPlaybackCallback() {
+        @Override public void onPlaybackConfigChanged(List<AudioPlaybackConfiguration> configurations) {
+            scheduleMediaCheck();
+        }
+    };
+
+    private void scheduleMediaCheck() {
+        handler.removeCallbacks(checkMedia);
+        handler.postDelayed(checkMedia, 150);
+    }
+
+    private void refreshMediaMode() {
+        // Public playback records are anonymous. Discount one matching ambient track
+        // while ours is playing, and ignore calls, alerts and system UI sounds.
+        boolean discountSelf = player.getPlayWhenReady();
+        boolean external = false;
+        for (AudioPlaybackConfiguration config : audio.getActivePlaybackConfigurations()) {
+            android.media.AudioAttributes attributes = config.getAudioAttributes();
+            int usage = attributes.getUsage();
+            if (usage != C.USAGE_MEDIA && usage != C.USAGE_GAME && usage != C.USAGE_UNKNOWN) continue;
+            if (discountSelf && usage == C.USAGE_MEDIA && attributes.getContentType() == C.AUDIO_CONTENT_TYPE_SONIFICATION) {
+                discountSelf = false;
+                continue;
+            }
+            external = true;
+            break;
+        }
+        if (external == otherMedia) return;
+        otherMedia = external;
+        player.setVolume(Volume.gain(percent()));
+        notifyControls();
+    }
     private String error = "";
     private boolean foreground;
     private final java.util.Set<Runnable> controlsListeners = new java.util.HashSet<>();
@@ -44,14 +83,20 @@ public class PlaybackService extends Service {
     @Override public void onCreate() {
         super.onCreate();
         selected = SoundCatalog.find(getSharedPreferences("settings", 0).getString("sound", "Rain")).key();
-        percent = Volume.clamp(getSharedPreferences("settings", 0).getInt("volume", 40));
+        SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        soloPercent = Volume.clamp(prefs.getInt("volume", 40));
+        mixedPercent = Volume.clamp(prefs.getInt("mixedVolume", soloPercent));
+        if (!prefs.contains("mixedVolume")) prefs.edit().putInt("mixedVolume", mixedPercent).apply();
         NotificationChannel channel = new NotificationChannel(CHANNEL, "背景音播放", NotificationManager.IMPORTANCE_LOW);
         channel.setSound(null, null);
         getSystemService(NotificationManager.class).createNotificationChannel(channel);
         player = new ExoPlayer.Builder(this)
-            .setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
+            .setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_SONIFICATION).build(), false)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_LOCAL).build();
-        player.setVolume(Volume.gain(percent));
+        player.setVolume(Volume.gain(percent()));
+        audio = getSystemService(AudioManager.class);
+        audio.registerAudioPlaybackCallback(mediaCallback, handler);
+        refreshMediaMode();
         player.setRepeatMode(Player.REPEAT_MODE_ALL);
         session = new MediaSession(this, "QuietBackground");
         session.setSessionActivity(PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE));
@@ -63,6 +108,7 @@ public class PlaybackService extends Service {
         });
         registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
         player.addListener(new Player.Listener() {
+            @Override public void onIsPlayingChanged(boolean isPlaying) { scheduleMediaCheck(); }
             @Override public void onEvents(Player p, Player.Events events) { updateState(); }
             @Override public void onPlayerError(PlaybackException e) {
                 error = "音源播放失败，请重新选择音源后重试。";
@@ -72,7 +118,8 @@ public class PlaybackService extends Service {
         });
     }
     public String selected() { return selected; }
-    public int percent() { return percent; }
+    public int percent() { return otherMedia ? mixedPercent : soloPercent; }
+    String volumeLabel() { return otherMedia ? "与其他媒体同播音量" : "单独播放音量"; }
     public boolean playing() { return player.getPlayWhenReady() && player.getPlayerError() == null; }
     public String status() {
         if (!error.isEmpty()) return error;
@@ -80,9 +127,11 @@ public class PlaybackService extends Service {
         return playing() ? "正在播放 · 可与其他应用共同播放" : "背景音已关闭";
     }
     public void setPercent(int value) {
-        percent = Volume.clamp(value);
+        int percent = Volume.clamp(value);
+        if (otherMedia) mixedPercent = percent;
+        else soloPercent = percent;
         player.setVolume(Volume.gain(percent));
-        getSharedPreferences("settings", 0).edit().putInt("volume", percent).apply();
+        getSharedPreferences("settings", 0).edit().putInt(otherMedia ? "mixedVolume" : "volume", percent).apply();
         notifyControls();
     }
     public void select(String key) {
@@ -175,8 +224,9 @@ public class PlaybackService extends Service {
     }
     // Swiping away the activity deliberately leaves an active foreground playback service running.
     @Override public void onDestroy() {
+        audio.unregisterAudioPlaybackCallback(mediaCallback);
         unregisterReceiver(screenOff);
-        player.release(); session.release();
+        player.release(); handler.removeCallbacks(checkMedia); session.release();
         getSystemService(NotificationManager.class).cancel(1);
         super.onDestroy();
     }

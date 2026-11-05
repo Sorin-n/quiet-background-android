@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
     private void render() {
         AudioManager audio = getSystemService(AudioManager.class);
         int system = Math.round(100f * audio.getStreamVolume(AudioManager.STREAM_MUSIC) / audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
-        String fingerprint = (service == null ? "disconnected" : service.selected() + service.status() + service.percent()) + ":" + system;
+        String fingerprint = (service == null ? "disconnected" : service.selected() + service.status() + service.volumeLabel() + service.percent()) + ":" + system;
         if (fingerprint.equals(renderedState)) return;
         renderedState = fingerprint;
         play.setEnabled(service != null); volume.setEnabled(service != null);
@@ -102,7 +102,7 @@ public class MainActivity extends Activity {
         current.setText(SoundCatalog.find(key).name());
         if (service != null) {
             status.setText(service.status()); play.setText(service.playing() ? "暂停" : "播放");
-            volume.setProgress(service.percent()); volumeLabel.setText("背景音量  " + service.percent() + "%");
+            volume.setProgress(service.percent()); volumeLabel.setText(service.volumeLabel() + "  " + service.percent() + "%");
         }
         systemLabel.setText("当前系统媒体音量 " + system + "%" + (system == 0 ? " · 系统已静音" : ""));
         for (SoundCatalog.Sound sound : SoundCatalog.ALL) {

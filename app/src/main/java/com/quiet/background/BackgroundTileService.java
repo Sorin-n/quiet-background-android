@@ -208,7 +208,7 @@ public final class BackgroundTileService extends TileService {
         status.setText(playback == null ? "正在连接播放器…" : playback.status());
         if (playback == null) return;
         power.setText(playing ? "关闭背景音" : "开启背景音");
-        volumeLabel.setText(getString(R.string.tile_volume, playback.percent()));
+        volumeLabel.setText(playback.volumeLabel() + "  " + playback.percent() + "%");
         volume.setProgress(playback.percent());
         sound.setText(getString(R.string.tile_sound, name));
         RadioButton selected = choices.findViewWithTag(playback.selected());

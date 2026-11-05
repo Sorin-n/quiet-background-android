@@ -20,7 +20,7 @@ final class ControlCard extends LinearLayout {
     private PlaybackService playback;
     private final Runnable togglePower;
     private ImageButton power;
-    private TextView soundName, playState, percent;
+    private TextView soundName, playState, percent, volumeMode;
     private SeekBar gain;
     private enum Page { MAIN, SOUNDS, SETTINGS }
     private Page page;
@@ -103,7 +103,8 @@ final class ControlCard extends LinearLayout {
         power.setOnClickListener(v -> togglePower.run());
         player.addView(power, dp(48), dp(48));
         LinearLayout volumeRow = row(body, 28);
-        volumeRow.addView(label("背景音量", 14, SECONDARY), new LayoutParams(0, -2, 1));
+        volumeMode = label("背景音量", 14, SECONDARY);
+        volumeRow.addView(volumeMode, new LayoutParams(0, -2, 1));
         percent = label("", 14, WHITE);
         volumeRow.addView(percent);
         gain = new VolumeBar(getContext());
@@ -141,6 +142,7 @@ final class ControlCard extends LinearLayout {
         power.setImageResource(on ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
         power.setContentDescription(on ? "关闭背景音" : "开启背景音");
         power.setBackground(clickable(on ? BLUE : SURFACE, 24));
+        volumeMode.setText(service.volumeLabel());
         percent.setText(service.percent() + "%");
         gain.setProgress(service.percent());
     }
