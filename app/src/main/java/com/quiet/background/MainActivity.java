@@ -2,7 +2,6 @@ package com.quiet.background;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -13,7 +12,8 @@ import android.media.AudioManager;
 import android.os.*;
 import android.view.*;
 import android.widget.*;
-
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class MainActivity extends Activity {
     private static final int INK = Color.rgb(32,62,73), MUTED = Color.rgb(88,111,120), TEAL = Color.rgb(40,122,136), BG = Color.rgb(242,247,249);
@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     private TextView current, status, volumeLabel, systemLabel;
     private Button play;
     private SeekBar volume;
-    private Button sounds;
+    private final Map<String, TextView> rows = new LinkedHashMap<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable refresh = new Runnable() { public void run() { render(); handler.postDelayed(this, 500); } };
     private final ServiceConnection connection = new ServiceConnection() {
@@ -43,7 +43,8 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
         LinearLayout body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); body.setPadding(dp(24), dp(22), dp(24), dp(24));
         scroll.addView(body); root.addView(scroll); setContentView(root);
-        TextView title = text("背景音", 30, INK); title.setTypeface(null, Typeface.BOLD); marginAdd(body, title, 0, 20);
+        TextView title = text("静听", 30, INK); title.setTypeface(null, Typeface.BOLD); body.addView(title);
+        TextView subtitle = text("给日常，留一点安静。", 15, MUTED); marginAdd(body, subtitle, 6, 22);
         LinearLayout player = new LinearLayout(this); player.setOrientation(LinearLayout.VERTICAL); player.setPadding(dp(20), dp(20), dp(20), dp(18));
         player.setBackground(shape(Color.WHITE, 20)); body.addView(player);
         current = text("雨声", 26, INK); current.setTypeface(null, Typeface.BOLD); player.addView(current);
@@ -52,7 +53,7 @@ public class MainActivity extends Activity {
         play.setBackgroundTintList(ColorStateList.valueOf(TEAL)); play.setMinHeight(dp(54)); player.addView(play, new LinearLayout.LayoutParams(-1, dp(56)));
         play.setOnClickListener(v -> {
             if (service == null) return;
-            if (service.playing()) service.stopPlayback();
+            if (service.playing()) service.pause();
             else {
                 startForegroundService(new Intent(this, PlaybackService.class).setAction(PlaybackService.PLAY));
                 if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -74,46 +75,21 @@ public class MainActivity extends Activity {
             @Override public void onStopTrackingTouch(SeekBar bar) {}
         });
         systemLabel = text("", 13, MUTED); player.addView(systemLabel);
-        sounds = new Button(this);
-        sounds.setText("切换背景音");
-        sounds.setOnClickListener(v -> chooseSound());
-        marginAdd(body, sounds, 18, 4);
-        Button settings = new Button(this);
-        settings.setText("背景音设置");
-        settings.setOnClickListener(v -> showSettings());
-        body.addView(settings);
-    }
-
-    private void chooseSound() {
-        if (service == null) return;
-        String[] names = new String[SoundCatalog.ALL.size()];
-        int selected = 0;
-        for (int i = 0; i < names.length; i++) {
-            SoundCatalog.Sound sound = SoundCatalog.ALL.get(i);
-            names[i] = sound.name();
-            if (sound.key().equals(service.selected())) selected = i;
+        TextView explanation = text("100% 使用当前系统媒体音量；50% 将本 App 播放增益减半。音量键仍控制系统音量。", 13, MUTED);
+        marginAdd(player, explanation, 8, 0);
+        TextView section = text("选择声音", 21, INK); section.setTypeface(null, Typeface.BOLD); marginAdd(body, section, 28, 0);
+        String group = "";
+        for (SoundCatalog.Sound sound : SoundCatalog.ALL) {
+            if (!group.equals(sound.group())) {
+                group = sound.group(); TextView label = text(group, 13, TEAL); marginAdd(body, label, 20, 6);
+            }
+            TextView row = text("", 16, INK); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(12), dp(12), dp(12), dp(12));
+            row.setMinHeight(dp(70)); row.setFocusable(true); row.setClickable(true);
+            row.setOnClickListener(v -> { if (service != null) { service.select(sound.key()); render(); } });
+            rows.put(sound.key(), row); body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+            View line = new View(this); line.setBackgroundColor(Color.rgb(220,231,235)); body.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
         }
-        new AlertDialog.Builder(this)
-            .setTitle("切换背景音")
-            .setSingleChoiceItems(names, selected, (dialog, which) -> {
-                if (service != null) service.select(SoundCatalog.ALL.get(which).key());
-                render();
-                dialog.dismiss();
-            })
-            .setNegativeButton("取消", null)
-            .show();
-    }
-
-    private void showSettings() {
-        SharedPreferences preferences = getSharedPreferences("settings", MODE_PRIVATE);
-        new AlertDialog.Builder(this)
-            .setTitle("背景音设置")
-            .setMultiChoiceItems(new String[]{"息屏时关闭背景音"},
-                new boolean[]{preferences.getBoolean(PlaybackService.STOP_ON_SCREEN_OFF, false)},
-                (dialog, which, checked) -> preferences.edit()
-                    .putBoolean(PlaybackService.STOP_ON_SCREEN_OFF, checked).apply())
-            .setPositiveButton("完成", null)
-            .show();
+        TextView footer = text("全部音源已内置，无需联网。\n播放时可切换应用或锁屏；在通知栏暂停或停止。", 13, MUTED); marginAdd(body, footer, 24, 8);
     }
     private void render() {
         AudioManager audio = getSystemService(AudioManager.class);
@@ -125,11 +101,17 @@ public class MainActivity extends Activity {
         String key = service != null ? service.selected() : getSharedPreferences("settings", 0).getString("sound", "Rain");
         current.setText(SoundCatalog.find(key).name());
         if (service != null) {
-            status.setText(service.status()); play.setText(service.playing() ? "关闭背景音" : "开启背景音");
+            status.setText(service.status()); play.setText(service.playing() ? "暂停" : "播放");
             volume.setProgress(service.percent()); volumeLabel.setText("背景音量  " + service.percent() + "%");
         }
         systemLabel.setText("当前系统媒体音量 " + system + "%" + (system == 0 ? " · 系统已静音" : ""));
-        sounds.setEnabled(service != null);
+        for (SoundCatalog.Sound sound : SoundCatalog.ALL) {
+            TextView row = rows.get(sound.key()); boolean selected = sound.key().equals(key);
+            row.setText((selected ? "✓  " : "     ") + sound.name() + "\n     " + sound.description());
+            row.setBackground(shape(selected ? Color.rgb(220,238,240) : BG, 10));
+            row.setTextColor(selected ? TEAL : INK); row.setSelected(selected);
+            row.setContentDescription(sound.name() + "，" + sound.description() + (selected ? "，已选中" : "，点按选择"));
+        }
     }
     @Override protected void onStart() {
         super.onStart(); bound = bindService(new Intent(this, PlaybackService.class), connection, BIND_AUTO_CREATE); handler.post(refresh);

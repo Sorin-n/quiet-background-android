@@ -7,7 +7,7 @@ import sys
 import zipfile
 root = pathlib.Path(__file__).resolve().parent.parent
 manifest = json.loads((root / 'docs/audio-manifest.json').read_text())
-apk = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else root / 'dist/静听背景音-v1.2.0-release.apk'
+apk = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else root / 'dist/静听背景音-v1.2.1-release.apk'
 with zipfile.ZipFile(apk) as archive:
     names = [n for n in archive.namelist() if n.startswith('assets/audio/') and n.endswith('.m4a')]
     assert len(names) == len(manifest) == 83
