@@ -24,6 +24,15 @@ public class PlaybackService extends Service {
     private int percent;
     private String error = "";
     private boolean foreground;
+    static final String STOP_ON_SCREEN_OFF = "stopOnScreenOff";
+    private final BroadcastReceiver screenOff = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (playing() && getSharedPreferences("settings", MODE_PRIVATE)
+                    .getBoolean(STOP_ON_SCREEN_OFF, false)) {
+                stopPlayback();
+            }
+        }
+    };
     public class LocalBinder extends Binder { public PlaybackService service() { return PlaybackService.this; } }
     @Override public IBinder onBind(Intent intent) { return binder; }
     @Override public void onCreate() {
@@ -46,6 +55,7 @@ public class PlaybackService extends Service {
             @Override public void onStop() { stopPlayback(); }
             @Override public void onCustomAction(String action, Bundle extras) { if (STOP.equals(action)) stopPlayback(); }
         });
+        registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
         player.addListener(new Player.Listener() {
             @Override public void onEvents(Player p, Player.Events events) { updateState(); }
             @Override public void onPlayerError(PlaybackException e) {
@@ -61,7 +71,7 @@ public class PlaybackService extends Service {
     public String status() {
         if (!error.isEmpty()) return error;
         if (playing() && player.getPlaybackState() == Player.STATE_BUFFERING) return "正在准备音源…";
-        return playing() ? "正在播放 · 可与其他应用共同播放" : "已暂停 · 点按播放，留一点安静";
+        return playing() ? "正在播放 · 可与其他应用共同播放" : "背景音已关闭";
     }
     public void setPercent(int value) {
         percent = Volume.clamp(value);
@@ -104,7 +114,7 @@ public class PlaybackService extends Service {
         }
     }
     public void pause() { player.pause(); updateState(); }
-    private void stopPlayback() {
+    void stopPlayback() {
         player.pause(); player.stop(); player.clearMediaItems();
         session.setActive(false);
         stopForeground(STOP_FOREGROUND_REMOVE); foreground = false;
@@ -156,6 +166,7 @@ public class PlaybackService extends Service {
     }
     // Swiping away the activity deliberately leaves an active foreground playback service running.
     @Override public void onDestroy() {
+        unregisterReceiver(screenOff);
         player.release(); session.release();
         getSystemService(NotificationManager.class).cancel(1);
         super.onDestroy();

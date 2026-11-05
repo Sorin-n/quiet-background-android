@@ -15,7 +15,7 @@
 
 ## 下载
 
-[下载最新正式 APK](https://github.com/Sorin-n/quiet-background-android/releases/latest) · [v1.0.0 发布页](https://github.com/Sorin-n/quiet-background-android/releases/tag/v1.0.0)
+[下载最新正式 APK](https://github.com/Sorin-n/quiet-background-android/releases/latest) · [v1.1.0 发布页](https://github.com/Sorin-n/quiet-background-android/releases/tag/v1.1.0)
 
 APK 约 457 MB，音源全部内置。校验值和安装说明随 Release 一起提供。
 
@@ -23,9 +23,19 @@ APK 约 457 MB，音源全部内置。校验值和安装说明随 Release 一起
 
 ## 安装与使用
 
-将 `dist/静听背景音-v1.0.0-release.apk` 传到 Android 手机，打开 APK 安装。若系统询问，为当前文件管理器开启“允许安装未知应用”。安装后选择声音并点按播放；Android 13 及以上可允许通知以方便控制。
+将 `dist/静听背景音-v1.1.0-release.apk` 传到 Android 手机，打开 APK 安装。若系统询问，为当前文件管理器开启“允许安装未知应用”。安装后选择声音并点按播放；Android 13 及以上可允许通知以方便控制。
 
 这是签名的 Release APK，非调试包。音源全部保留，因此 APK 约 460 MB。首次安装需预留足够存储。应用没有开机自动播放；系统强制停止后需手动打开。部分厂商的省电管理可能中断后台播放，可在该手机的电池设置中允许本 App 后台运行。其他应用自身主动暂停、电话/系统策略强制静音等情况无法由本 App 保证覆盖。
+
+## 在华为控制中心添加「背景音」入口
+
+Mate 40 Pro（HarmonyOS 4.2.0）的智慧生活场景支持「应用服务 → 控制应用 → 打开指定应用」。手机上需先安装静听。
+
+1. 在智慧生活创建手动场景，名称填「背景音」，条件选「手动点击」。
+2. 在「添加任务 → 应用服务 → 控制应用 → 打开指定应用」中选择「静听·背景音」，保存并运行一次。
+3. 从右上角下拉控制中心，打开编辑菜单，在「编辑智能设备」或「编辑智慧场景」（以手机显示为准）中选择该手动场景。能否添加和排序由手机控制中心决定。
+
+华为提示运行「打开指定应用」动作时手机需要亮屏、解锁并联网。卡片用于启动 App，点入后的面板可以开关背景音、调节相对音量、切换声音，或进入「背景音设置」设置息屏时是否关闭声音。默认息屏继续播放。
 
 ## 开发与构建
 
